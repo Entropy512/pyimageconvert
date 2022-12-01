@@ -33,7 +33,7 @@ if(fileext == '.exr'):
     exrimage = pyroexr.load(args['input'])
     channels = exrimage.channels()
     #very much hardcoded to RGB, likely will fail for many other scenarios
-    hdrimage = np.concatenate((channels['R'][:,:,np.newaxis], channels['G'][:,:,np.newaxis], channels['B'][:,:,np.newaxis]), axis=2)
+    hdrimage = np.dstack((channels['R'], channels['G'], channels['B']))
 
 else:
     hdrimage = imagecodecs.imread(args['input'])
