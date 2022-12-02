@@ -39,7 +39,7 @@ preserved_keys = ['Exif.Photo.LensModel',
 
 with rawpy.imread(args['input']) as raw:
     bayer_pattern = raw.raw_pattern
-    bayer = raw.raw_image.astype('float64') # by default, astype makes a copy, so we should be safe here
+    bayer = raw.raw_image_visible.astype('float64') # by default, astype makes a copy, so we should be safe here
     WB_AsShot = raw.camera_whitebalance
     WhiteLevel = raw.white_level
     WhiteLevel_perChannel = raw.camera_white_level_per_channel
