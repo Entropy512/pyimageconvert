@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import argparse
 import os
+import pyexiv2
 
 #Lots of boilerplate code taken from rawpy's use_rawpy example here
 ap = argparse.ArgumentParser()
@@ -22,7 +23,19 @@ ap_name = ap.prog #TODO: Determine if we care about this, rawpy did it but we do
 filebase = os.path.splitext(args['input'])[0]
 dngname = filebase + '.dng'
 
-
+preserved_keys = ['Exif.Photo.LensModel',
+                'Exif.Photo.LensModel',
+                'Exif.Photo.FocalLengthIn35mmFilm',
+                'Exif.Photo.FocalLength',
+                'Exif.Photo.FNumber',
+                'Exif.Photo.ExposureTime',
+                'Exif.Image.Make',
+                'Exif.Image.Model',
+                'Exif.Image.Orientation',
+                'Exif.Image.DateTime',
+                'Exif.Sony2.SonyModelID', #not sure if we want to keep this?
+                'Exif.Sony2.LensID', #needed for RT to get lens data
+                'Exif.Photo.ISOSpeedRatings']
 
 with rawpy.imread(args['input']) as raw:
     bayer_pattern = raw.raw_pattern
@@ -32,6 +45,11 @@ with rawpy.imread(args['input']) as raw:
     WhiteLevel_perChannel = raw.camera_white_level_per_channel
     BlackLevel_perChannel = raw.black_level_per_channel
     CM_XYZ2camRGB = raw.rgb_xyz_matrix
+
+with pyexiv2.Image(args['input']) as exiv_file:
+    exif_data = exiv_file.read_exif()
+    preserved_data = {k: exif_data[k] for k in set(preserved_keys).intersection(exif_data.keys())}
+    print(preserved_data)
 
 #FIXME:  Handle X-Trans somehow.  Low priority since I don't own an x-trans camera and likely never will
 if bayer_pattern.shape != (2,2):
@@ -88,3 +106,6 @@ with TIFF.TiffWriter(dngname) as dng:
             #predictor=True,
             tile=(512,512), #RT does not like strips, save as tiles
             extratags=dng_extratags)
+
+with pyexiv2.Image(dngname) as dng:
+    dng.modify_exif(preserved_data)
