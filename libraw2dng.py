@@ -49,7 +49,6 @@ with rawpy.imread(args['input']) as raw:
 with pyexiv2.Image(args['input']) as exiv_file:
     exif_data = exiv_file.read_exif()
     preserved_data = {k: exif_data[k] for k in set(preserved_keys).intersection(exif_data.keys())}
-    print(preserved_data)
 
 #FIXME:  Handle X-Trans somehow.  Low priority since I don't own an x-trans camera and likely never will
 if bayer_pattern.shape != (2,2):
