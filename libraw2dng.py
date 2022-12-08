@@ -12,6 +12,8 @@ import argparse
 import os
 import pyexiv2
 
+pyexiv2.enableBMFF()
+
 #Lots of boilerplate code taken from rawpy's use_rawpy example here
 ap = argparse.ArgumentParser()
 ap.add_argument('-i', '--input', required=True,
