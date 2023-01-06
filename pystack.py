@@ -26,38 +26,29 @@ filecount = 0
 
 for infile in args['input']:
     with rawpy.imread(infile) as raw:
-        bayer_pattern = raw.raw_pattern
+        cfa_pattern = raw.raw_pattern.astype(np.uint8)
         bayer = raw.raw_image_visible.astype('float64') # by default, astype makes a copy, so we should be safe here
         WB_AsShot = raw.camera_whitebalance
         WhiteLevel = raw.white_level
         WhiteLevel_perChannel = raw.camera_white_level_per_channel
         BlackLevel_perChannel = raw.black_level_per_channel
         CM_XYZ2camRGB = raw.rgb_xyz_matrix
+        blacklevel_array = np.array(BlackLevel_perChannel)[cfa_pattern]
         filecount += 1
 
     #FIXME:  Detect if anything changes from file to file which should make us bomb out
 
-    #FIXME:  Handle X-Trans somehow.  Low priority since I don't own an x-trans camera and likely never will
-    if bayer_pattern.shape != (2,2):
-        print ('\n   *** Error ***\nBayer pattern isn\'t 2 by 2\n', ap_name, 'is terminated\n')
+
+    if not np.all(np.isin(cfa_pattern, [0,1,2,3])):
+        print ('\n   *** Error ***\nCFA pattern contains non-RGB channels\n', ap_name, 'is terminated\n')
         exit()
 
-    if not np.all(np.isin([0,1,2,3], bayer_pattern)):
-        print ('\n   *** Error ***\nBayer pattern contains non-RGB channels\n', ap_name, 'is terminated\n')
-        exit()
-
-    iRrow,  iRclmn  = np.argwhere(bayer_pattern == 0)[0]
-    iG0row, iG0clmn = np.argwhere(bayer_pattern == 1)[0]
-    iBrow,  iBclmn  = np.argwhere(bayer_pattern == 2)[0]
-    iG1row, iG1clmn = np.argwhere(bayer_pattern == 3)[0]
-    
-    bayer[ iRrow::2,  iRclmn::2] -= BlackLevel_perChannel[0]
-    bayer[iG0row::2, iG0clmn::2] -= BlackLevel_perChannel[1]
-    bayer[ iBrow::2,  iBclmn::2] -= BlackLevel_perChannel[2]
-    bayer[iG1row::2, iG1clmn::2] -= BlackLevel_perChannel[3]
+    for i in range(blacklevel_array.shape[0]):
+        for j in range(blacklevel_array.shape[1]):
+            bayer[i::blacklevel_array.shape[0], j::blacklevel_array.shape[1]] -= blacklevel_array[i][j]
 
     #RT crashes badly if we preserve G1 as 3 instead of mapping it to 1.  TODO:  Check what DNG spec says about this.
-    bayer_pattern[bayer_pattern == 3] = 1
+    cfa_pattern[cfa_pattern == 3] = 1
 
     #FIXME:  Handle this better/more flexibly/more cleanly
     cmatrix = CM_XYZ2camRGB[:-1,:]
@@ -105,10 +96,12 @@ def cm_to_flatrational(input_array):
     retarray[1::2] = 10000
     return retarray
 
+print(cfa_pattern)
+print(cfa_pattern.flatten())
 #FIXME:  Save camera model into output so RT can detect appropriate DCP profile
 dng_extratags = []
-dng_extratags.append(('CFARepeatPatternDim', 'H', len(bayer_pattern.shape), bayer_pattern.shape, 0))
-dng_extratags.append(('CFAPattern', 'B', bayer_pattern.size, bayer_pattern.flatten()))
+dng_extratags.append(('CFARepeatPatternDim', 'H', len(cfa_pattern.shape), cfa_pattern.shape, 0))
+dng_extratags.append(('CFAPattern', 'B', cfa_pattern.size, cfa_pattern.flatten()))
 dng_extratags.append(('ColorMatrix1', '2i', cmatrix.size, cm_to_flatrational(cmatrix)))
 dng_extratags.append(('CalibrationIlluminant1', 'H', 1, 21)) #is there an enum for this in tifffile???
 dng_extratags.append(('BlackLevelRepeatDim', 'H', 2, [1,1])) #BlackLevelRepeatDim
