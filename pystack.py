@@ -27,7 +27,7 @@ filecount = 0
 for infile in args['input']:
     with rawpy.imread(infile) as raw:
         cfa_pattern = raw.raw_pattern.astype(np.uint8)
-        bayer = raw.raw_image_visible.astype('float64') # by default, astype makes a copy, so we should be safe here
+        bayer = raw.raw_image.astype('float64') # by default, astype makes a copy, so we should be safe here
         WB_AsShot = raw.camera_whitebalance
         WhiteLevel = raw.white_level
         WhiteLevel_perChannel = raw.camera_white_level_per_channel
