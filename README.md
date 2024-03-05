@@ -8,7 +8,3 @@ https://github.com/Beep6581/RawTherapee/issues/6612
 https://github.com/Beep6581/RawTherapee/issues/6606
 https://github.com/Beep6581/RawTherapee/issues/1895
 
-Currently depends on as-yet unreleased improvements/fixes in tifffile and imagecodecs as of November 2022.  All issues *should* be fixed as of the next tifffile and imagecodecs releases:
-
-https://github.com/cgohlke/tifffile/issues/167
-https://github.com/cgohlke/imagecodecs/pull/53
