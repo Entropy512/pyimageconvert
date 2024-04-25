@@ -104,9 +104,9 @@ with TIFF.TiffWriter(dngname) as dng:
             photometric='CFA',
             compression='zlib',
             predictor=34894, #floatingpointx2 predictor, currently requires patched tifffile to work properly until next tifffile release - November 2022
-            #predictor=True,
             tile=(512,512), #RT does not like strips, save as tiles
-            extratags=dng_extratags)
+            extratags=dng_extratags,
+            subfiletype=0)
 
 with pyexiv2.Image(dngname) as dng:
     dng.modify_exif(preserved_data)
