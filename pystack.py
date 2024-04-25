@@ -18,6 +18,7 @@ pyexiv2.enableBMFF()
 ap = argparse.ArgumentParser()
 ap.add_argument('-i', '--input', nargs='+', type=argparse.FileType('rb'), required=True,
     help='path to input files')
+ap.add_argument('-w', '--wbnorm', action='store_true', help='Normalize white balance to match 5300k Daylight for extreme WB situations (such as UV/IR)')
 
 args = vars(ap.parse_args())
 ap_name = ap.prog #TODO: Determine if we care about this, rawpy did it but we don't really need it.
@@ -54,8 +55,14 @@ for infile in args['input']:
     cmatrix = CM_XYZ2camRGB[:-1,:]
 
     if(filecount == 1):
-        dng_data = bayer
-
+        dng_data = np.zeros(bayer.shape)
+        refwb = np.array([2.5327, 1.0, 1.41, 1.0])
+        if args['wbnorm']:
+            destwb = refwb*WB_AsShot[1]
+            wbadj = WB_AsShot/(WB_AsShot[1]*refwb)
+            print(wbadj)
+        else:
+            destwb = WB_AsShot
         #FIXME:  Choose a better output filename than the first input raw file
         filebase = os.path.splitext(infile.name)[0]
         #FIXME:  This will clobber the first file if the input is a DNG...
@@ -81,8 +88,12 @@ for infile in args['input']:
             exif_data = exiv_file.read_exif()
             preserved_data = {k: exif_data[k] for k in set(preserved_keys).intersection(exif_data.keys())}
 
-    else:
-        dng_data += bayer
+    if args['wbnorm']:
+        for i in range(cfa_pattern.shape[0]):
+            for j in range(cfa_pattern.shape[1]):
+                bayer[i::cfa_pattern.shape[0], j::cfa_pattern.shape[1]] *= wbadj[cfa_pattern[i][j]]
+
+    dng_data += bayer
 
 dng_data /= filecount
 avg_blacklevel = np.mean(BlackLevel_perChannel)
@@ -96,29 +107,33 @@ def cm_to_flatrational(input_array):
     retarray[1::2] = 10000
     return retarray
 
-print(cfa_pattern)
-print(cfa_pattern.flatten())
+unique_cam_model = preserved_data['Exif.Image.Make'] + " " + preserved_data['Exif.Image.Model']
+
 #FIXME:  Save camera model into output so RT can detect appropriate DCP profile
-dng_extratags = []
-dng_extratags.append(('CFARepeatPatternDim', 'H', len(cfa_pattern.shape), cfa_pattern.shape, 0))
-dng_extratags.append(('CFAPattern', 'B', cfa_pattern.size, cfa_pattern.flatten()))
-dng_extratags.append(('ColorMatrix1', '2i', cmatrix.size, cm_to_flatrational(cmatrix)))
-dng_extratags.append(('CalibrationIlluminant1', 'H', 1, 21)) #is there an enum for this in tifffile???
-dng_extratags.append(('BlackLevelRepeatDim', 'H', 2, [1,1])) #BlackLevelRepeatDim
-dng_extratags.append(('BlackLevel', 'H', 1, 0)) #BlackLevel - We subtracted black during processing, so it is 0
-dng_extratags.append(('WhiteLevel', 'I', 1, 65504)) #WhiteLevel
-dng_extratags.append(('DNGVersion', 'B', 4, [1,4,0,0])) #DNGVersion
-dng_extratags.append(('DNGBackwardVersion', 'B', 4, [1,4,0,0])) #DNGBackwardVersion
-dng_extratags.append(('AsShotNeutral', '2I', 3, np.array([WB_AsShot[1],WB_AsShot[0],WB_AsShot[1],WB_AsShot[1],WB_AsShot[1],WB_AsShot[2]], dtype=np.uint32))) #Normalize green channel to 1...  Not sure if libraw always uses 1024 as a reference for 1.0 in the white balance
+dng_maintags = []
+dng_rawtags = []
+dng_rawtags.append(('CFARepeatPatternDim', 'H', len(cfa_pattern.shape), cfa_pattern.shape, 0))
+dng_rawtags.append(('CFAPattern', 'B', cfa_pattern.size, cfa_pattern.flatten()))
+dng_rawtags.append(('CFAPlaneColor', 'B', 3, [0, 1, 2]))
+dng_maintags.append(('ColorMatrix1', '2i', cmatrix.size, cm_to_flatrational(cmatrix)))
+dng_maintags.append(('CalibrationIlluminant1', 'H', 1, 21)) #is there an enum for this in tifffile???
+dng_rawtags.append(('BlackLevelRepeatDim', 'H', 2, [2,2])) #BlackLevelRepeatDim
+dng_rawtags.append(('BlackLevel', 'H', 4, [0, 0, 0, 0])) #BlackLevel - We subtracted black during processing, so it is 0
+dng_rawtags.append(('WhiteLevel', 'I', 1, int(wpoint))) #WhiteLevel
+dng_maintags.append(('TIFFEPStandardID', 'B', 4, [1,0,0,0])) #DNGVersion
+dng_maintags.append(('DNGVersion', 'B', 4, [1,4,0,0])) #DNGVersion
+dng_maintags.append(('DNGBackwardVersion', 'B', 4, [1,4,0,0])) #DNGBackwardVersion
+dng_maintags.append(('AsShotNeutral', '2I', 3, np.array([destwb[1],destwb[0],destwb[1],destwb[1],destwb[1],destwb[2]], dtype=np.uint32))) #Normalize green channel to 1...  Not sure if libraw always uses 1024 as a reference for 1.0 in the white balance
+dng_maintags.append(('UniqueCameraModel', 's', len(unique_cam_model), unique_cam_model))
 
 with TIFF.TiffWriter(dngname) as dng:
     dng.write(dng_data.astype(np.float16),
             photometric='CFA',
             compression='zlib',
             predictor=34894, #floatingpointx2 predictor, currently requires patched tifffile to work properly until next tifffile release - November 2022
-            #predictor=True,
             tile=(512,512), #RT does not like strips, save as tiles
-            extratags=dng_extratags)
+            extratags=dng_rawtags + dng_maintags,
+            subfiletype=0)
 
 with pyexiv2.Image(dngname) as dng:
     dng.modify_exif(preserved_data)
