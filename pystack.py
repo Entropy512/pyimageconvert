@@ -97,8 +97,13 @@ for infile in args['input']:
 
 dng_data /= filecount
 avg_blacklevel = np.mean(BlackLevel_perChannel)
-dng_data *= 65504/(WhiteLevel - avg_blacklevel)
+wpoint = 65504
+dng_data *= wpoint/(WhiteLevel - avg_blacklevel)
 
+if(np.amax(dng_data) > 65504):
+    scalefac = 65504/np.amax(dng_data)
+    dng_data *= scalefac
+    wpoint *= scalefac
 
 #fugly, find a better solution for generating RATIONAL/SRATIONAL
 def cm_to_flatrational(input_array):
