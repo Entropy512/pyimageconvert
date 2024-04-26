@@ -1,0 +1,45 @@
+name: Build Windows EXEs
+
+on:
+  workflow_dispatch:
+
+  release:
+    types: [published]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name:  Checkout the repo
+        uses: actions/checkout@v4
+
+      - name: Run the build process with Docker
+        uses: addnab/docker-run-action@v3
+        with:
+          image: batonogov/pyinstaller-windows:python-3.11.7
+          options: -v ${{ github.workspace }}:/src/
+          run: |
+            pip install -r requirements.txt
+            pyinstaller --clean -y --dist ./pyi_dist --workpath /tmp pyimageconvert.spec
+            chown -R --reference=/src /src
+            chmod g+w -R pyi_dist
+
+      - name: Zip the PyInstaller folder
+        run: |
+          ls -al
+          cd pyi_dist
+          zip pyimageconvert.zip pyimageconvert -r
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyimageconvert.zip
+          path: pyi_dist/pyimageconvert.zip
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: ${{github.ref_type == 'tag' && github.event_name == 'release'}}
+        with:
+          files: pyi_dist/pyimageconvert.zip
