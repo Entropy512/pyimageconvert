@@ -1,0 +1,7 @@
+imagecodecs
+numpy
+pyexiv2
+tifffile
+pyroexr
+czifile
+rawpy
