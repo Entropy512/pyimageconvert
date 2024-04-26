@@ -18,6 +18,7 @@ jobs:
       - name: Run the build process with Docker
         uses: addnab/docker-run-action@v3
         with:
+          registry: ghcr.io
           image: batonogov/pyinstaller-windows:python-3.11.7
           options: -v ${{ github.workspace }}:/src/
           run: |
